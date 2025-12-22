@@ -40,4 +40,5 @@ backup_*.sql
 *.tsbuildinfo
 next-env.d.ts
 
-/.continue
+
+/.continue/agents/new-config.yaml
