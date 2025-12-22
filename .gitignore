@@ -39,6 +39,3 @@ backup_*.sql
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-
-
-/.continue/agents/new-config.yaml
