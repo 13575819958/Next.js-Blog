@@ -1,50 +1,47 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import pool from '@/lib/db';
-import { ResultSetHeader } from 'mysql2';
+import { CategoryRepository } from '@/lib/repositories/category-repository';
+import { ApiResponse, withErrorHandling } from '@/lib/api-response';
 
-export async function GET() {
-  try {
-    const [rows] = await pool.query(
-      'SELECT * FROM categories ORDER BY name ASC'
-    );
+const categoryRepository = new CategoryRepository();
 
-    return NextResponse.json(rows);
-  } catch (error) {
-    console.error('获取分类失败:', error);
-    return NextResponse.json({ error: '获取分类失败' }, { status: 500 });
-  }
+export async function GET(request: NextRequest) {
+  return withErrorHandling(async () => {
+    const categories = await categoryRepository.getAllCategories();
+    return ApiResponse.success(categories, '获取分类列表成功');
+  })(request);
 }
 
 export async function POST(request: NextRequest) {
-  try {
+  return withErrorHandling(async (req: NextRequest) => {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return ApiResponse.unauthorized();
     }
 
-    const body = await request.json();
+    const body = await req.json();
     const { name, slug, description } = body;
 
     if (!name || !slug) {
-      return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
+      return ApiResponse.validationError({ name: '名称必填', slug: '别名必填' });
     }
 
-    const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO categories (name, slug, description) VALUES (?, ?, ?)',
-      [name, slug, description || '']
-    );
+    // 检查名称和别名是否已存在
+    const [nameExists, slugExists] = await Promise.all([
+      categoryRepository.checkNameExists(name),
+      categoryRepository.checkSlugExists(slug)
+    ]);
 
-    return NextResponse.json({ 
-      id: result.insertId,
-      message: '分类创建成功' 
-    }, { status: 201 });
-  } catch (error: any) {
-    console.error('创建分类失败:', error);
-    if (error.code === 'ER_DUP_ENTRY') {
-      return NextResponse.json({ error: '分类别名已存在' }, { status: 400 });
+    if (nameExists) {
+      return ApiResponse.conflict('分类名称已存在');
     }
-    return NextResponse.json({ error: '创建分类失败' }, { status: 500 });
-  }
+
+    if (slugExists) {
+      return ApiResponse.conflict('分类别名已存在');
+    }
+
+    const id = await categoryRepository.create({ name, slug, description });
+    return ApiResponse.created({ id }, '分类创建成功');
+  })(request);
 }

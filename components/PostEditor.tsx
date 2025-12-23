@@ -1,10 +1,18 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Post, Category } from '@/types';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+import dynamic from 'next/dynamic';
+
+// 动态导入 TiptapEditor，确保客户端渲染
+const TiptapEditor = dynamic(() => import('./TiptapEditor'), {
+  loading: () => (
+    <div className="border border-gray-300 rounded-md p-4 bg-gray-50 animate-pulse">
+      <div className="h-64 bg-gray-200 rounded"></div>
+    </div>
+  ),
+});
 
 interface PostEditorProps {
   post?: Post;
@@ -21,7 +29,18 @@ export default function PostEditor({ post, categories }: PostEditorProps) {
   const [published, setPublished] = useState(post?.published || false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [previewMode, setPreviewMode] = useState<'edit' | 'preview' | 'split'>('split');
+
+  // 当内容变化时，自动生成摘要（如果为空）
+  useEffect(() => {
+    if (!excerpt && content) {
+      // 从 HTML 内容中提取纯文本
+      const text = content.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+      if (text.length > 0) {
+        const autoExcerpt = text.substring(0, 150) + (text.length > 150 ? '...' : '');
+        setExcerpt(autoExcerpt);
+      }
+    }
+  }, [content, excerpt]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,9 +64,14 @@ export default function PostEditor({ post, categories }: PostEditorProps) {
         }),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || '保存失败');
+        throw new Error((result as any).error || '保存失败');
+      }
+
+      if (!result.success) {
+        throw new Error((result as any).error || '保存失败');
       }
 
       router.push('/admin/posts');
@@ -122,8 +146,11 @@ export default function PostEditor({ post, categories }: PostEditorProps) {
             onChange={(e) => setExcerpt(e.target.value)}
             rows={3}
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="文章摘要（选填）"
+            placeholder="文章摘要（选填，留空将自动生成）"
           />
+          <p className="text-xs text-gray-500 mt-1">
+            提示：留空并输入内容后，系统会自动生成摘要
+          </p>
         </div>
 
         <div>
@@ -145,94 +172,14 @@ export default function PostEditor({ post, categories }: PostEditorProps) {
         </div>
 
         <div>
-          <div className="flex justify-between items-center mb-2">
-            <label className="block text-sm font-medium text-gray-700">
-              内容 * (支持 Markdown)
-            </label>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setPreviewMode('edit')}
-                className={`px-3 py-1 text-sm rounded ${
-                  previewMode === 'edit'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700'
-                }`}
-              >
-                编辑
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewMode('split')}
-                className={`px-3 py-1 text-sm rounded ${
-                  previewMode === 'split'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700'
-                }`}
-              >
-                分屏
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreviewMode('preview')}
-                className={`px-3 py-1 text-sm rounded ${
-                  previewMode === 'preview'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-200 text-gray-700'
-                }`}
-              >
-                预览
-              </button>
-            </div>
-          </div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            内容 * (富文本编辑器)
+          </label>
           
-          <div className={`grid gap-4 ${
-            previewMode === 'split' ? 'grid-cols-2' : 'grid-cols-1'
-          }`}>
-            {(previewMode === 'edit' || previewMode === 'split') && (
-              <div>
-                <textarea
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  required
-                  rows={20}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                  placeholder="# 文章标题\n\n开始编写你的文章...\n\n## 二级标题\n\n- 列表项 1\n- 列表项 2\n\n**粗体** *斜体*\n\n```javascript\nconst hello = 'world';\n```"
-                />
-              </div>
-            )}
-            
-            {(previewMode === 'preview' || previewMode === 'split') && (
-              <div className="border border-gray-300 rounded-md p-4 bg-gray-50 overflow-auto" style={{ maxHeight: '500px' }}>
-                <div className="prose prose-sm max-w-none">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {content || '*暂无内容*'}
-                  </ReactMarkdown>
-                </div>
-              </div>
-            )}
-          </div>
-          
-          <div className="mt-2 text-xs text-gray-500">
-            <details>
-              <summary className="cursor-pointer hover:text-gray-700">Markdown 语法帮助</summary>
-              <div className="mt-2 p-3 bg-gray-50 rounded">
-                <code className="text-xs">
-                  # 一级标题<br/>
-                  ## 二级标题<br/>
-                  **粗体** *斜体*<br/>
-                  [链接](https://example.com)<br/>
-                  ![图片](url)<br/>
-                  - 列表<br/>
-                  1. 有序列表<br/>
-                  `代码`<br/>
-                  ```语言<br/>
-                  代码块<br/>
-                  ```
-                </code>
-              </div>
-            </details>
-          </div>
+          <TiptapEditor 
+            content={content}
+            onChange={setContent}
+          />
         </div>
 
         <div className="flex items-center gap-2">

@@ -1,100 +1,32 @@
 import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import pool from '@/lib/db';
-import { Post, Comment } from '@/types';
-import { RowDataPacket } from 'mysql2';
+import { PostRepository } from '@/lib/repositories/post-repository';
+import { CommentRepository } from '@/lib/repositories/comment-repository';
 import { format } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
-import ReactMarkdown from 'react-markdown';
-import remarkGfm from 'remark-gfm';
+// Tiptap 生成的是 HTML，不需要 Markdown 渲染器
 import CommentForm from '@/components/CommentForm';
 import CommentList from '@/components/CommentList';
 import Navbar from '@/components/Navbar';
 
-interface PostWithCategory extends RowDataPacket {
-  id: number;
-  title: string;
-  slug: string;
-  content: string;
-  excerpt: string;
-  category_id: number;
-  category_name: string;
-  created_at: Date;
-  updated_at: Date;
-}
+const postRepository = new PostRepository();
+const commentRepository = new CommentRepository();
 
-interface CommentRow extends RowDataPacket {
-  id: number;
-  post_id: number;
-  user_id?: number;
-  author_name: string;
-  author_email: string;
-  author_avatar?: string;
-  content: string;
-  created_at: Date;
-  approved: boolean;
-}
-
-async function getPost(slug: string): Promise<Post | null> {
+async function getPost(slug: string) {
   try {
     console.log('正在查询文章, slug:', slug);
-    
-    const [rows] = await pool.query<PostWithCategory[]>(
-      `SELECT p.*, c.name as category_name 
-       FROM posts p 
-       LEFT JOIN categories c ON p.category_id = c.id 
-       WHERE p.slug = ? AND p.published = TRUE`,
-      [slug]
-    );
-
-    console.log('查询结果:', rows.length);
-    
-    if (rows.length === 0) {
-      console.log('未找到文章');
-      return null;
-    }
-
-    const row = rows[0];
-    return {
-      id: row.id,
-      title: row.title,
-      slug: row.slug,
-      content: row.content,
-      excerpt: row.excerpt,
-      category_id: row.category_id,
-      category_name: row.category_name,
-      created_at: row.created_at.toISOString(),
-      updated_at: row.updated_at.toISOString(),
-      published: true,
-    };
+    const post = await postRepository.getPostBySlug(slug);
+    console.log('查询结果:', post ? '找到' : '未找到');
+    return post;
   } catch (error) {
     console.error('获取文章失败:', error);
     return null;
   }
 }
 
-async function getComments(postId: number): Promise<Comment[]> {
+async function getComments(postId: number) {
   try {
-    const [rows] = await pool.query<CommentRow[]>(
-      `SELECT c.*, u.avatar as author_avatar 
-       FROM comments c
-       LEFT JOIN users u ON c.user_id = u.id
-       WHERE c.post_id = ? AND c.approved = TRUE 
-       ORDER BY c.created_at DESC`,
-      [postId]
-    );
-
-    return rows.map(row => ({
-      id: row.id,
-      post_id: row.post_id,
-      user_id: row.user_id,
-      author_name: row.author_name,
-      author_email: row.author_email,
-      author_avatar: row.author_avatar,
-      content: row.content,
-      created_at: row.created_at.toISOString(),
-      approved: row.approved,
-    }));
+    return await commentRepository.getApprovedCommentsByPost(postId);
   } catch (error) {
     console.error('获取评论失败:', error);
     return [];
@@ -131,11 +63,10 @@ export default async function PostPage({ params }: { params: { slug: string } })
             <h1 className="text-4xl font-bold text-gray-900 mb-4">{post.title}</h1>
           </header>
 
-          <div className="prose prose-lg max-w-none">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {post.content}
-            </ReactMarkdown>
-          </div>
+          <div 
+            className="prose prose-lg max-w-none"
+            dangerouslySetInnerHTML={{ __html: post.content }}
+          />
         </article>
 
         {/* Comments Section */}

@@ -1,67 +1,70 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import pool from '@/lib/db';
-import { ResultSetHeader } from 'mysql2';
+import { CategoryRepository } from '@/lib/repositories/category-repository';
+import { ApiResponse, withErrorHandling } from '@/lib/api-response';
+
+const categoryRepository = new CategoryRepository();
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
+  return withErrorHandling(async (req: NextRequest) => {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return ApiResponse.unauthorized();
     }
 
-    const body = await request.json();
+    const body = await req.json();
     const { name, slug, description } = body;
 
     if (!name || !slug) {
-      return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
+      return ApiResponse.validationError({ name: '名称必填', slug: '别名必填' });
     }
 
-    const [result] = await pool.query<ResultSetHeader>(
-      'UPDATE categories SET name = ?, slug = ?, description = ? WHERE id = ?',
-      [name, slug, description || '', params.id]
-    );
+    const id = parseInt(params.id);
 
-    if (result.affectedRows === 0) {
-      return NextResponse.json({ error: '分类不存在' }, { status: 404 });
+    // 检查名称和别名是否已存在（排除当前分类）
+    const [nameExists, slugExists] = await Promise.all([
+      categoryRepository.checkNameExists(name, id),
+      categoryRepository.checkSlugExists(slug, id)
+    ]);
+
+    if (nameExists) {
+      return ApiResponse.conflict('分类名称已存在');
     }
 
-    return NextResponse.json({ message: '分类更新成功' });
-  } catch (error: any) {
-    console.error('更新分类失败:', error);
-    if (error.code === 'ER_DUP_ENTRY') {
-      return NextResponse.json({ error: '分类别名已存在' }, { status: 400 });
+    if (slugExists) {
+      return ApiResponse.conflict('分类别名已存在');
     }
-    return NextResponse.json({ error: '更新分类失败' }, { status: 500 });
-  }
+
+    const success = await categoryRepository.update(id, { name, slug, description });
+    if (!success) {
+      return ApiResponse.notFound('分类不存在');
+    }
+
+    return ApiResponse.updated(undefined, '分类更新成功');
+  })(request);
 }
 
 export async function DELETE(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
-  try {
+  return withErrorHandling(async () => {
     const session = await getServerSession(authOptions);
     if (!session) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
+      return ApiResponse.unauthorized();
     }
 
-    const [result] = await pool.query<ResultSetHeader>(
-      'DELETE FROM categories WHERE id = ?',
-      [params.id]
-    );
-
-    if (result.affectedRows === 0) {
-      return NextResponse.json({ error: '分类不存在' }, { status: 404 });
+    const id = parseInt(params.id);
+    const success = await categoryRepository.delete(id);
+    
+    if (!success) {
+      return ApiResponse.notFound('分类不存在');
     }
 
-    return NextResponse.json({ message: '分类删除成功' });
-  } catch (error) {
-    console.error('删除分类失败:', error);
-    return NextResponse.json({ error: '删除分类失败' }, { status: 500 });
-  }
+    return ApiResponse.deleted('分类删除成功');
+  })(request);
 }

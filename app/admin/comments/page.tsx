@@ -3,40 +3,13 @@ import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import AdminLayout from '@/components/AdminLayout';
 import CommentsManager from '@/components/CommentsManager';
-import pool from '@/lib/db';
-import { Comment } from '@/types';
-import { RowDataPacket } from 'mysql2';
+import { CommentRepository } from '@/lib/repositories/comment-repository';
 
-interface CommentRow extends RowDataPacket {
-  id: number;
-  post_id: number;
-  post_title: string;
-  author_name: string;
-  author_email: string;
-  content: string;
-  approved: boolean;
-  created_at: Date;
-}
+const commentRepository = new CommentRepository();
 
-async function getComments(): Promise<(Comment & { post_title: string })[]> {
+async function getComments() {
   try {
-    const [rows] = await pool.query<CommentRow[]>(
-      `SELECT c.*, p.title as post_title 
-       FROM comments c 
-       LEFT JOIN posts p ON c.post_id = p.id 
-       ORDER BY c.created_at DESC`
-    );
-
-    return rows.map(row => ({
-      id: row.id,
-      post_id: row.post_id,
-      post_title: row.post_title,
-      author_name: row.author_name,
-      author_email: row.author_email,
-      content: row.content,
-      approved: row.approved,
-      created_at: row.created_at.toISOString(),
-    }));
+    return await commentRepository.getAllCommentsWithPostTitle();
   } catch (error) {
     console.error('获取评论失败:', error);
     return [];

@@ -2,26 +2,45 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --foreground-rgb: 255, 255, 255;
-    --background-start-rgb: 0, 0, 0;
-    --background-end-rgb: 0, 0, 0;
-  }
-}
-
+/* 基础样式优化 */
 body {
-  color: rgb(var(--foreground-rgb));
   background: white;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Markdown 样式 */
+/* 优化滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+/* 链接和按钮的触摸优化 */
+a, button {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* 图片优化 */
+img {
+  max-width: 100%;
+  height: auto;
+}
+
+/* Markdown 样式优化 */
 .prose {
   max-width: none;
 }
@@ -32,6 +51,7 @@ body {
   padding: 1rem;
   border-radius: 0.5rem;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .prose code {
@@ -48,26 +68,16 @@ body {
   padding: 0;
 }
 
-.prose h1 {
-  font-size: 2em;
-  font-weight: bold;
-  margin-top: 1em;
+.prose h1, .prose h2, .prose h3 {
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 1.5em;
   margin-bottom: 0.5em;
 }
 
-.prose h2 {
-  font-size: 1.5em;
-  font-weight: bold;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-}
-
-.prose h3 {
-  font-size: 1.25em;
-  font-weight: bold;
-  margin-top: 1em;
-  margin-bottom: 0.5em;
-}
+.prose h1 { font-size: 2em; }
+.prose h2 { font-size: 1.5em; }
+.prose h3 { font-size: 1.25em; }
 
 .prose ul, .prose ol {
   padding-left: 1.5em;
@@ -81,6 +91,9 @@ body {
 .prose a {
   color: #2563eb;
   text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+  transition: color 0.2s;
 }
 
 .prose a:hover {
@@ -95,17 +108,11 @@ body {
   margin: 1em 0;
 }
 
-.prose img {
-  max-width: 100%;
-  height: auto;
-  border-radius: 0.5rem;
-  margin: 1em 0;
-}
-
 .prose table {
   width: 100%;
   border-collapse: collapse;
   margin: 1em 0;
+  font-size: 0.875em;
 }
 
 .prose th,
@@ -117,5 +124,36 @@ body {
 
 .prose th {
   background-color: #f9fafb;
-  font-weight: bold;
+  font-weight: 600;
+}
+
+/* 动画优化 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+/* 减少动画的偏好 */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 触摸目标大小优化 */
+button, .btn {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* 文本选择优化 */
+::selection {
+  background-color: #bfdbfe;
+  color: #1e3a8a;
 }

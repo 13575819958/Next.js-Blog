@@ -1,45 +1,38 @@
-import { NextRequest, NextResponse } from 'next/server';
-import pool from '@/lib/db';
-import { ResultSetHeader, RowDataPacket } from 'mysql2';
+import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
+import { CommentRepository } from '@/lib/repositories/comment-repository';
+import { ApiResponse, withErrorHandling } from '@/lib/api-response';
+
+const commentRepository = new CommentRepository();
 
 export async function GET(request: NextRequest) {
-  try {
-    const searchParams = request.nextUrl.searchParams;
+  return withErrorHandling(async (req: NextRequest) => {
+    const searchParams = req.nextUrl.searchParams;
     const postId = searchParams.get('postId');
     
-    let query = `
-      SELECT c.*, u.name as user_name, u.avatar as user_avatar 
-      FROM comments c
-      LEFT JOIN users u ON c.user_id = u.id
-    `;
-    const params: any[] = [];
-
     if (postId) {
-      query += ' WHERE c.post_id = ? AND c.approved = TRUE';
-      params.push(postId);
+      const comments = await commentRepository.getApprovedCommentsByPost(parseInt(postId));
+      return ApiResponse.success(comments, '获取评论列表成功');
     }
 
-    query += ' ORDER BY c.created_at DESC';
-
-    const [rows] = await pool.query(query, params);
-
-    return NextResponse.json(rows);
-  } catch (error) {
-    console.error('获取评论失败:', error);
-    return NextResponse.json({ error: '获取评论失败' }, { status: 500 });
-  }
+    // 如果没有postId，返回所有评论（管理后台用）
+    const allComments = await commentRepository.getAllCommentsWithPostTitle();
+    return ApiResponse.success(allComments, '获取评论列表成功');
+  })(request);
 }
 
 export async function POST(request: NextRequest) {
-  try {
+  return withErrorHandling(async (req: NextRequest) => {
     const session = await getServerSession(authOptions);
-    const body = await request.json();
+    const body = await req.json();
     const { post_id, author_name, author_email, content } = body;
 
     if (!post_id || !content) {
-      return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
+      return ApiResponse.validationError({ 
+        post_id: '文章ID必填', 
+        content: '评论内容必填' 
+      });
     }
 
     let userId = null;
@@ -54,30 +47,32 @@ export async function POST(request: NextRequest) {
     } else {
       // 未登录用户需要提供姓名和邮箱
       if (!author_name || !author_email) {
-        return NextResponse.json({ error: '请填写姓名和邮箱' }, { status: 400 });
+        return ApiResponse.validationError({ 
+          author_name: '姓名必填', 
+          author_email: '邮箱必填' 
+        });
       }
 
       // 简单的邮箱验证
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(author_email)) {
-        return NextResponse.json({ error: '邮箱格式不正确' }, { status: 400 });
+        return ApiResponse.validationError({ author_email: '邮箱格式不正确' });
       }
     }
 
     // 管理员的评论自动审核通过
     const approved = session?.user?.role === 'admin';
 
-    const [result] = await pool.query<ResultSetHeader>(
-      'INSERT INTO comments (post_id, user_id, author_name, author_email, content, approved) VALUES (?, ?, ?, ?, ?, ?)',
-      [post_id, userId, finalAuthorName, finalAuthorEmail, content, approved]
-    );
+    const id = await commentRepository.create({
+      post_id,
+      user_id: userId || undefined,
+      author_name: finalAuthorName,
+      author_email: finalAuthorEmail,
+      content,
+      approved
+    });
 
-    return NextResponse.json({ 
-      id: result.insertId,
-      message: '评论提交成功，等待审核' 
-    }, { status: 201 });
-  } catch (error) {
-    console.error('创建评论失败:', error);
-    return NextResponse.json({ error: '创建评论失败' }, { status: 500 });
-  }
+    const message = approved ? '评论创建成功' : '评论提交成功，等待审核';
+    return ApiResponse.created({ id }, message);
+  })(request);
 }

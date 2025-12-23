@@ -25,14 +25,20 @@ export default function PostsTable({ posts: initialPosts }: PostsTableProps) {
         method: 'DELETE',
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        throw new Error('删除失败');
+        throw new Error((result as any).error || '删除失败');
       }
 
-      setPosts(posts.filter((post) => post.id !== id));
-      router.refresh();
+      if (result.success) {
+        setPosts(posts.filter((post) => post.id !== id));
+        router.refresh();
+      } else {
+        throw new Error((result as any).error || '删除失败');
+      }
     } catch (error) {
-      alert('删除失败，请重试');
+      alert((error as Error).message || '删除失败，请重试');
     } finally {
       setDeleting(null);
     }

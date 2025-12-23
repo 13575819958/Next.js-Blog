@@ -2,32 +2,30 @@ import { getServerSession } from 'next-auth';
 import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import AdminLayout from '@/components/AdminLayout';
-import pool from '@/lib/db';
-import { RowDataPacket } from 'mysql2';
+import { PostRepository } from '@/lib/repositories/post-repository';
+import { CommentRepository } from '@/lib/repositories/comment-repository';
 import Link from 'next/link';
 
-interface Stats extends RowDataPacket {
-  total_posts: number;
-  published_posts: number;
-  total_comments: number;
-  pending_comments: number;
-}
+const postRepository = new PostRepository();
+const commentRepository = new CommentRepository();
 
 async function getStats() {
   try {
-    const [postsResult] = await pool.query<Stats[]>(
-      'SELECT COUNT(*) as total_posts, SUM(published) as published_posts FROM posts'
-    );
+    // 获取所有文章（包括未发布的）
+    const allPosts = await postRepository.findAll();
+    const publishedPosts = allPosts.filter(p => p.published);
     
-    const [commentsResult] = await pool.query<Stats[]>(
-      'SELECT COUNT(*) as total_comments, SUM(NOT approved) as pending_comments FROM comments'
-    );
+    // 获取待审核评论数量
+    const pendingComments = await commentRepository.getPendingCount();
+    
+    // 获取所有评论数量
+    const allComments = await commentRepository.getAllCommentsWithPostTitle();
 
     return {
-      totalPosts: postsResult[0]?.total_posts || 0,
-      publishedPosts: postsResult[0]?.published_posts || 0,
-      totalComments: commentsResult[0]?.total_comments || 0,
-      pendingComments: commentsResult[0]?.pending_comments || 0,
+      totalPosts: allPosts.length,
+      publishedPosts: publishedPosts.length,
+      totalComments: allComments.length,
+      pendingComments: pendingComments,
     };
   } catch (error) {
     console.error('获取统计数据失败:', error);

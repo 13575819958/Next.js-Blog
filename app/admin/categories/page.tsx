@@ -3,31 +3,13 @@ import { redirect } from 'next/navigation';
 import { authOptions } from '@/lib/auth';
 import AdminLayout from '@/components/AdminLayout';
 import CategoriesManager from '@/components/CategoriesManager';
-import pool from '@/lib/db';
-import { Category } from '@/types';
-import { RowDataPacket } from 'mysql2';
+import { CategoryRepository } from '@/lib/repositories/category-repository';
 
-interface CategoryRow extends RowDataPacket {
-  id: number;
-  name: string;
-  slug: string;
-  description: string;
-  created_at: Date;
-}
+const categoryRepository = new CategoryRepository();
 
-async function getCategories(): Promise<Category[]> {
+async function getCategories() {
   try {
-    const [rows] = await pool.query<CategoryRow[]>(
-      'SELECT * FROM categories ORDER BY name ASC'
-    );
-
-    return rows.map(row => ({
-      id: row.id,
-      name: row.name,
-      slug: row.slug,
-      description: row.description,
-      created_at: row.created_at.toISOString(),
-    }));
+    return await categoryRepository.getAllCategories();
   } catch (error) {
     console.error('获取分类失败:', error);
     return [];

@@ -37,9 +37,14 @@ export default function CommentForm({ postId }: CommentFormProps) {
         }),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || '提交失败');
+        throw new Error((result as any).error || '提交失败');
+      }
+
+      if (!result.success) {
+        throw new Error((result as any).error || '提交失败');
       }
 
       setSuccess(true);

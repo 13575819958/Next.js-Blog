@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -10,54 +10,61 @@ export default function RegisterPage() {
     name: '',
     email: '',
     password: '',
-    confirmPassword: '',
+    confirmPassword: ''
   });
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+  const [isPending, startTransition] = useTransition();
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setSuccess('');
 
-    // 验证密码
     if (formData.password !== formData.confirmPassword) {
       setError('两次输入的密码不一致');
       return;
     }
 
-    setLoading(true);
-
-    try {
-      const response = await fetch('/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name: formData.name,
-          email: formData.email,
-          password: formData.password,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        setError(data.error || '注册失败');
-        return;
-      }
-
-      // 注册成功，跳转到登录页
-      router.push('/login?registered=true');
-    } catch (err) {
-      setError('注册失败，请稍后重试');
-    } finally {
-      setLoading(false);
+    if (formData.password.length < 6) {
+      setError('密码长度至少需要6位');
+      return;
     }
-  };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({
-      ...formData,
-      [e.target.name]: e.target.value,
+    startTransition(async () => {
+      try {
+        const response = await fetch('/api/auth/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: formData.name,
+            email: formData.email,
+            password: formData.password
+          })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error((result as any).error || '注册失败');
+        }
+
+        if (!result.success) {
+          throw new Error((result as any).error || '注册失败');
+        }
+
+        setSuccess('注册成功！3秒后跳转到登录页面...');
+        setTimeout(() => {
+          router.push('/login');
+        }, 3000);
+      } catch (err: any) {
+        setError(err.message);
+      }
     });
   };
 
@@ -68,7 +75,7 @@ export default function RegisterPage() {
           创建账户
         </h1>
         <p className="text-center text-gray-600">
-          加入我们的博客社区
+          注册一个新的账户
         </p>
       </div>
 
@@ -76,14 +83,20 @@ export default function RegisterPage() {
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
+              <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm animate-fade-in">
                 {error}
+              </div>
+            )}
+            
+            {success && (
+              <div className="bg-green-50 text-green-600 p-3 rounded-md text-sm animate-fade-in">
+                {success}
               </div>
             )}
 
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700">
-                用户名
+                姓名
               </label>
               <input
                 id="name"
@@ -92,8 +105,10 @@ export default function RegisterPage() {
                 value={formData.name}
                 onChange={handleChange}
                 required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="张三"
+                disabled={isPending}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:bg-gray-100"
+                placeholder="您的姓名"
+                autoComplete="name"
               />
             </div>
 
@@ -108,8 +123,10 @@ export default function RegisterPage() {
                 value={formData.email}
                 onChange={handleChange}
                 required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                disabled={isPending}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:bg-gray-100"
                 placeholder="your@email.com"
+                autoComplete="email"
               />
             </div>
 
@@ -124,10 +141,12 @@ export default function RegisterPage() {
                 value={formData.password}
                 onChange={handleChange}
                 required
-                minLength={6}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="至少6个字符"
+                disabled={isPending}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:bg-gray-100"
+                placeholder="••••••••"
+                autoComplete="new-password"
               />
+              <p className="mt-1 text-xs text-gray-500">密码长度至少6位</p>
             </div>
 
             <div>
@@ -141,19 +160,27 @@ export default function RegisterPage() {
                 value={formData.confirmPassword}
                 onChange={handleChange}
                 required
-                minLength={6}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                placeholder="再次输入密码"
+                disabled={isPending}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:bg-gray-100"
+                placeholder="••••••••"
+                autoComplete="new-password"
               />
             </div>
 
             <div>
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                disabled={isPending}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? '注册中...' : '注册'}
+                {isPending ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    注册中...
+                  </span>
+                ) : (
+                  '注册'
+                )}
               </button>
             </div>
           </form>
@@ -171,7 +198,7 @@ export default function RegisterPage() {
             <div className="mt-6 text-center">
               <Link
                 href="/login"
-                className="font-medium text-blue-600 hover:text-blue-500"
+                className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
               >
                 已有账户？立即登录
               </Link>
@@ -180,7 +207,7 @@ export default function RegisterPage() {
             <div className="mt-4 text-center">
               <Link
                 href="/"
-                className="text-sm text-gray-600 hover:text-gray-900"
+                className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
               >
                 ← 返回首页
               </Link>

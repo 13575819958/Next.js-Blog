@@ -36,6 +36,11 @@ yarn-error.log*
 # backup files
 *.sql.backup
 backup_*.sql
+# database files
+*.sql
+*.db
+*.sqlite
+*.sqlite3
 
 # vercel
 .vercel

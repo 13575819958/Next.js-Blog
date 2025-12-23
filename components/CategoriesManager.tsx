@@ -30,9 +30,14 @@ export default function CategoriesManager({ initialCategories }: CategoriesManag
         body: JSON.stringify(formData),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error);
+        throw new Error((result as any).error || '操作失败');
+      }
+
+      if (!result.success) {
+        throw new Error((result as any).error || '操作失败');
       }
 
       setFormData({ name: '', slug: '', description: '' });
@@ -42,8 +47,10 @@ export default function CategoriesManager({ initialCategories }: CategoriesManag
       
       // 重新获取分类列表
       const categoriesResponse = await fetch('/api/categories');
-      const updatedCategories = await categoriesResponse.json();
-      setCategories(updatedCategories);
+      const categoriesResult = await categoriesResponse.json();
+      if (categoriesResult.success) {
+        setCategories(categoriesResult.data);
+      }
     } catch (error: any) {
       alert(error.message);
     } finally {

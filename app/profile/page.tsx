@@ -42,13 +42,14 @@ export default function ProfilePage() {
   const fetchProfile = async () => {
     try {
       const response = await fetch('/api/user/profile');
-      if (response.ok) {
-        const data = await response.json();
-        setProfile(data);
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        setProfile(result.data);
         setFormData({
-          name: data.name,
-          bio: data.bio || '',
-          avatar: data.avatar || '',
+          name: result.data.name,
+          bio: result.data.bio || '',
+          avatar: result.data.avatar || '',
           currentPassword: '',
           newPassword: '',
           confirmPassword: '',

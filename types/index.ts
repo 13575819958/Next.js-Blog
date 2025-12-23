@@ -42,3 +42,33 @@ export interface User {
   created_at: string;
   updated_at: string;
 }
+
+// 认证用户类型（包含密码）
+export interface AuthUser {
+  id: number;
+  email: string;
+  password: string;
+  name: string;
+  avatar?: string;
+  role: 'user' | 'admin';
+  status: 'active' | 'banned';
+}
+
+// 创建用户数据类型
+export interface CreateUserInput {
+  email: string;
+  password: string;
+  name: string;
+  avatar?: string;
+  bio?: string;
+}
+
+// 更新用户数据类型
+export interface UpdateUserInput {
+  email?: string;
+  name?: string;
+  avatar?: string;
+  bio?: string;
+  role?: 'user' | 'admin';
+  status?: 'active' | 'banned';
+}

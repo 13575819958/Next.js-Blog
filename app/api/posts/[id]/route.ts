@@ -1,89 +1,107 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getServerSession } from 'next-auth';
 import { authOptions } from '@/lib/auth';
-import pool from '@/lib/db';
-import { ResultSetHeader } from 'mysql2';
+import { PostRepository } from '@/lib/repositories/post-repository';
+import { ApiResponse, withErrorHandling } from '@/lib/api-response';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const [rows] = await pool.query(
-      'SELECT p.*, c.name as category_name FROM posts p LEFT JOIN categories c ON p.category_id = c.id WHERE p.id = ?',
-      [params.id]
-    );
+const postRepository = new PostRepository();
 
-    const posts = rows as any[];
-    if (posts.length === 0) {
-      return NextResponse.json({ error: '文章不存在' }, { status: 404 });
-    }
-
-    return NextResponse.json(posts[0]);
-  } catch (error) {
-    console.error('获取文章失败:', error);
-    return NextResponse.json({ error: '获取文章失败' }, { status: 500 });
+// GET /api/posts/[id] - 获取文章详情
+export const GET = withErrorHandling(async (request: NextRequest, { params }: { params: { id: string } }) => {
+  const id = parseInt(params.id);
+  
+  if (isNaN(id)) {
+    return ApiResponse.validationError({ id: 'ID必须是数字' });
   }
-}
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
-
-    const body = await request.json();
-    const { title, slug, content, excerpt, category_id, published } = body;
-
-    if (!title || !slug || !content) {
-      return NextResponse.json({ error: '缺少必填字段' }, { status: 400 });
-    }
-
-    const [result] = await pool.query<ResultSetHeader>(
-      'UPDATE posts SET title = ?, slug = ?, content = ?, excerpt = ?, category_id = ?, published = ? WHERE id = ?',
-      [title, slug, content, excerpt || '', category_id || null, published || false, params.id]
-    );
-
-    if (result.affectedRows === 0) {
-      return NextResponse.json({ error: '文章不存在' }, { status: 404 });
-    }
-
-    return NextResponse.json({ message: '文章更新成功' });
-  } catch (error: any) {
-    console.error('更新文章失败:', error);
-    if (error.code === 'ER_DUP_ENTRY') {
-      return NextResponse.json({ error: 'URL 别名已存在' }, { status: 400 });
-    }
-    return NextResponse.json({ error: '更新文章失败' }, { status: 500 });
+  const post = await postRepository.getPostById(id);
+  
+  if (!post) {
+    return ApiResponse.notFound('文章不存在');
   }
-}
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
-  try {
-    const session = await getServerSession(authOptions);
-    if (!session) {
-      return NextResponse.json({ error: '未授权' }, { status: 401 });
-    }
+  return ApiResponse.success(post, '获取文章成功');
+});
 
-    const [result] = await pool.query<ResultSetHeader>(
-      'DELETE FROM posts WHERE id = ?',
-      [params.id]
-    );
-
-    if (result.affectedRows === 0) {
-      return NextResponse.json({ error: '文章不存在' }, { status: 404 });
-    }
-
-    return NextResponse.json({ message: '文章删除成功' });
-  } catch (error) {
-    console.error('删除文章失败:', error);
-    return NextResponse.json({ error: '删除文章失败' }, { status: 500 });
+// PUT /api/posts/[id] - 更新文章
+export const PUT = withErrorHandling(async (request: NextRequest, { params }: { params: { id: string } }) => {
+  const session = await getServerSession(authOptions);
+  
+  if (!session) {
+    return ApiResponse.unauthorized();
   }
-}
+
+  const id = parseInt(params.id);
+  
+  if (isNaN(id)) {
+    return ApiResponse.validationError({ id: 'ID必须是数字' });
+  }
+
+  const body = await request.json();
+  const { title, slug, content, excerpt, category_id, published } = body;
+
+  // 参数验证
+  if (!title || !slug || !content) {
+    return ApiResponse.validationError({
+      title: !title ? '标题不能为空' : undefined,
+      slug: !slug ? 'URL别名不能为空' : undefined,
+      content: !content ? '内容不能为空' : undefined
+    });
+  }
+
+  // 检查文章是否存在
+  const existingPost = await postRepository.findById(id);
+  if (!existingPost) {
+    return ApiResponse.notFound('文章不存在');
+  }
+
+  // 检查slug是否已存在（排除当前文章）
+  const slugExists = await postRepository.checkSlugExists(slug, id);
+  if (slugExists) {
+    return ApiResponse.conflict('URL别名已存在，请使用其他别名');
+  }
+
+  const success = await postRepository.update(id, {
+    title,
+    slug,
+    content,
+    excerpt,
+    category_id,
+    published
+  });
+
+  if (!success) {
+    return ApiResponse.error('更新文章失败');
+  }
+
+  return ApiResponse.updated({ id }, '文章更新成功');
+});
+
+// DELETE /api/posts/[id] - 删除文章
+export const DELETE = withErrorHandling(async (request: NextRequest, { params }: { params: { id: string } }) => {
+  const session = await getServerSession(authOptions);
+  
+  if (!session) {
+    return ApiResponse.unauthorized();
+  }
+
+  const id = parseInt(params.id);
+  
+  if (isNaN(id)) {
+    return ApiResponse.validationError({ id: 'ID必须是数字' });
+  }
+
+  // 检查文章是否存在
+  const existingPost = await postRepository.findById(id);
+  if (!existingPost) {
+    return ApiResponse.notFound('文章不存在');
+  }
+
+  const success = await postRepository.delete(id);
+
+  if (!success) {
+    return ApiResponse.error('删除文章失败');
+  }
+
+  return ApiResponse.deleted('文章删除成功');
+});

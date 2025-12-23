@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import { signIn } from 'next-auth/react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
@@ -10,33 +10,32 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [isPending, startTransition] = useTransition();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    setLoading(true);
 
-    try {
-      const result = await signIn('credentials', {
-        email,
-        password,
-        redirect: false,
-      });
+    startTransition(async () => {
+      try {
+        const result = await signIn('credentials', {
+          email,
+          password,
+          redirect: false,
+        });
 
-      if (result?.error) {
-        setError('邮箱或密码错误');
-      } else {
-        const callbackUrl = searchParams.get('callbackUrl') || '/';
-        router.push(callbackUrl);
-        router.refresh();
+        if (result?.error) {
+          setError('邮箱或密码错误');
+        } else {
+          const callbackUrl = searchParams.get('callbackUrl') || '/';
+          router.push(callbackUrl);
+          router.refresh();
+        }
+      } catch (err) {
+        setError('登录失败，请稍后重试');
       }
-    } catch (err) {
-      setError('登录失败，请稍后重试');
-    } finally {
-      setLoading(false);
-    }
+    });
   };
 
   return (
@@ -54,7 +53,7 @@ export default function LoginPage() {
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form onSubmit={handleSubmit} className="space-y-6">
             {error && (
-              <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm">
+              <div className="bg-red-50 text-red-600 p-3 rounded-md text-sm animate-fade-in">
                 {error}
               </div>
             )}
@@ -69,8 +68,10 @@ export default function LoginPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                disabled={isPending}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:bg-gray-100"
                 placeholder="your@email.com"
+                autoComplete="email"
               />
             </div>
 
@@ -84,18 +85,27 @@ export default function LoginPage() {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                disabled={isPending}
+                className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:bg-gray-100"
                 placeholder="••••••••"
+                autoComplete="current-password"
               />
             </div>
 
             <div>
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
+                disabled={isPending}
+                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
-                {loading ? '登录中...' : '登录'}
+                {isPending ? (
+                  <span className="flex items-center gap-2">
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                    登录中...
+                  </span>
+                ) : (
+                  '登录'
+                )}
               </button>
             </div>
           </form>
@@ -113,7 +123,7 @@ export default function LoginPage() {
             <div className="mt-6 text-center">
               <Link
                 href="/register"
-                className="font-medium text-blue-600 hover:text-blue-500"
+                className="font-medium text-blue-600 hover:text-blue-500 transition-colors"
               >
                 还没有账户？立即注册
               </Link>
@@ -122,7 +132,7 @@ export default function LoginPage() {
             <div className="mt-4 text-center">
               <Link
                 href="/"
-                className="text-sm text-gray-600 hover:text-gray-900"
+                className="text-sm text-gray-600 hover:text-gray-900 transition-colors"
               >
                 ← 返回首页
               </Link>

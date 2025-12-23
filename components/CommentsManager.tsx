@@ -24,16 +24,22 @@ export default function CommentsManager({ initialComments }: CommentsManagerProp
         body: JSON.stringify({ approved }),
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        throw new Error('操作失败');
+        throw new Error((result as any).error || '操作失败');
       }
 
-      setComments(comments.map((comment) =>
-        comment.id === id ? { ...comment, approved } : comment
-      ));
-      router.refresh();
+      if (result.success) {
+        setComments(comments.map((comment) =>
+          comment.id === id ? { ...comment, approved } : comment
+        ));
+        router.refresh();
+      } else {
+        throw new Error((result as any).error || '操作失败');
+      }
     } catch (error) {
-      alert('操作失败，请重试');
+      alert((error as Error).message || '操作失败，请重试');
     } finally {
       setProcessing(null);
     }
@@ -48,14 +54,20 @@ export default function CommentsManager({ initialComments }: CommentsManagerProp
         method: 'DELETE',
       });
 
+      const result = await response.json();
+
       if (!response.ok) {
-        throw new Error('删除失败');
+        throw new Error((result as any).error || '删除失败');
       }
 
-      setComments(comments.filter((comment) => comment.id !== id));
-      router.refresh();
+      if (result.success) {
+        setComments(comments.filter((comment) => comment.id !== id));
+        router.refresh();
+      } else {
+        throw new Error((result as any).error || '删除失败');
+      }
     } catch (error) {
-      alert('删除失败，请重试');
+      alert((error as Error).message || '删除失败，请重试');
     } finally {
       setProcessing(null);
     }
